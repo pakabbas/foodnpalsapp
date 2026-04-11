@@ -1,0 +1,105 @@
+{
+  "project_info": {
+    "project_number": "185169875957",
+    "project_id": "foodnpals-461fc",
+    "storage_bucket": "foodnpals-461fc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:185169875957:android:f7eb8bb39ec094cfca46bc",
+        "android_client_info": {
+          "package_name": "com.foodnpals.foodnpalsApp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "185169875957-93qc8fa590s1tea5diqpg4i6iuv4be6r.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDHI-00LuBoIJ5P6yJpsouxkgyPJiuK-n0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "103078422383186835757",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:185169875957:android:c4b0801920ea664cca46bc",
+        "android_client_info": {
+          "package_name": "com.foodnpals.foodnpalsApp1"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "185169875957-93qc8fa590s1tea5diqpg4i6iuv4be6r.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDHI-00LuBoIJ5P6yJpsouxkgyPJiuK-n0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "103078422383186835757",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:185169875957:android:5a950bd9168f6608ca46bc",
+        "android_client_info": {
+          "package_name": "com.foodnpals.foodnpalsWaiterApp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "185169875957-sj5strk7n3v4up3nhqvcqmjd39nun937.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.foodnpals.foodnpalsWaiterApp",
+            "certificate_hash": "776aba260ea57f138e5c21e38ad4ad1cf01f3855"
+          }
+        },
+        {
+          "client_id": "185169875957-93qc8fa590s1tea5diqpg4i6iuv4be6r.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDHI-00LuBoIJ5P6yJpsouxkgyPJiuK-n0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "103078422383186835757",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FoodnPals</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #4CBB17 0%, #50B849 100%);
+            color: #333;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px 30px;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 400px;
+            width: 90%;
+            margin: 20px;
+        }
+        
+        .logo {
+            background: #4CBB17;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 15px;
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 30px;
+            display: inline-block;
+        }
+        
+        .icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.7;
+        }
+        
+        h1 {
+            font-size: 28px;
+            margin-bottom: 15px;
+            color: #333;
+            font-weight: 600;
+        }
+        
+        p {
+            font-size: 16px;
+            margin-bottom: 30px;
+            line-height: 1.6;
+            color: #666;
+        }
+        
+        .retry-btn {
+            background: #4CBB17;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(76, 187, 23, 0.3);
+            min-width: 120px;
+        }
+        
+        .retry-btn:hover {
+            background: #45a716;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(76, 187, 23, 0.4);
+        }
+        
+        .retry-btn:active {
+            transform: translateY(0);
+        }
+        
+        .loading {
+            display: none;
+            margin-top: 15px;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #4CBB17;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 480px) {
+            .container {
+                padding: 30px 20px;
+                margin: 10px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+            
+            .logo {
+                font-size: 20px;
+                padding: 12px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">FoodnPals</div>
+        
+        <div class="icon">📱</div>
+        
+        <h1>Connection Issue</h1>
+        <p>We're having trouble connecting to our servers.<br>
+        Please check your internet connection and try again.</p>
+        
+        <button class="retry-btn" onclick="retryConnection()">
+            Try Again
+        </button>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p style="margin-top: 10px; font-size: 14px; color: #666;">Connecting...</p>
+        </div>
+    </div>
+
+    <script>
+        function retryConnection() {
+            const btn = document.querySelector('.retry-btn');
+            const loading = document.getElementById('loading');
+            
+            // Show loading state
+            btn.style.display = 'none';
+            loading.style.display = 'block';
+            
+            // Try to reload the page after a short delay
+            setTimeout(() => {
+                // Try to go back to the main app
+                if (window.history.length > 1) {
+                    window.history.back();
+                } else {
+                    // Fallback: reload current page
+                    window.location.reload();
+                }
+            }, 1500);
+        }
+        
+        // Auto-retry after 5 seconds if user doesn't interact
+        setTimeout(() => {
+            const btn = document.querySelector('.retry-btn');
+            if (btn && btn.style.display !== 'none') {
+                retryConnection();
+            }
+        }, 5000);
+    </script>
+</body>
+</html>
