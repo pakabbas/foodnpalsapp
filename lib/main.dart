@@ -1096,7 +1096,7 @@ class WebViewScreen extends StatefulWidget {
   State<WebViewScreen> createState() => _WebViewScreenState();
 }
 
-class _WebViewScreenState extends State<WebViewScreen> {
+class _WebViewScreenState extends State<WebViewScreen> with WidgetsBindingObserver {
   late final WebViewController _controller;
   final _urlController = TextEditingController();
   int _selectedIndex = 0;
@@ -1116,11 +1116,15 @@ class _WebViewScreenState extends State<WebViewScreen> {
   /// Avoid duplicate foreground starts when confirmation page reloads.
   final Set<String> _autoTrackedReservationIds = <String>{};
 
+  /// Blocks interaction with the WebView on [payment_setup.php] until location is "always" (Android) or acceptable (iOS).
+  bool _paymentSetupLocationBlocked = false;
+
   late final List<String> _urls;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _screenShownAt = DateTime.now();
     
     // Initialize URLs (authentication will be handled via cookies)
@@ -1370,6 +1374,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
         onUrlChange: (change) {
           if (!mounted) return;
           print('URL Changed to: ${change.url}'); // Debug print
+          unawaited(_reevaluatePaymentSetupLocationGate(change.url));
         },
         onPageStarted: (url) {
           if (!mounted) return;
@@ -1386,6 +1391,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
           _resetRetryCounter();
           _reinjectGeolocationOverride();
           unawaited(_injectLocationTrackingBridge());
+          unawaited(_reevaluatePaymentSetupLocationGate(url));
           unawaited(_maybeAutoStartTrackingFromConfirmationUrl(url));
           _startLocationUpdates();
           
@@ -1482,11 +1488,66 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _positionStream?.cancel();
     _locationTimer?.cancel();
     _pageLoadTimer?.cancel();
     _retryTimer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_reevaluatePaymentSetupLocationGate());
+    }
+  }
+
+  bool _isFoodnpalsPaymentSetupUrl(String? url) {
+    if (url == null || url.isEmpty) {
+      return false;
+    }
+    final uri = Uri.tryParse(url);
+    if (uri == null) {
+      return false;
+    }
+    if (!uri.host.toLowerCase().contains('foodnpals.com')) {
+      return false;
+    }
+    return uri.path.toLowerCase().contains('payment_setup.php');
+  }
+
+  Future<void> _reevaluatePaymentSetupLocationGate([String? url]) async {
+    if (!mounted) {
+      return;
+    }
+    if (widget.token == 'guest' || widget.email == 'guest') {
+      if (_paymentSetupLocationBlocked) {
+        setState(() => _paymentSetupLocationBlocked = false);
+      }
+      return;
+    }
+    final current = url ?? await _controller.currentUrl() ?? _urlController.text;
+    if (!_isFoodnpalsPaymentSetupUrl(current)) {
+      if (_paymentSetupLocationBlocked) {
+        setState(() => _paymentSetupLocationBlocked = false);
+      }
+      return;
+    }
+    var ok = await PermissionService.hasRequiredLocationForJourneyTracking();
+    if (!ok) {
+      var p = await Geolocator.checkPermission();
+      if (p == LocationPermission.denied) {
+        p = await Geolocator.requestPermission();
+        ok = await PermissionService.hasRequiredLocationForJourneyTracking();
+      }
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _paymentSetupLocationBlocked = !ok;
+    });
   }
 
   /// When the site does not call [window.startTracking], start from confirmation URL + API coords.
@@ -1524,7 +1585,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
     if (!mounted) {
       return;
     }
-    final granted = await PermissionService.requestLocationPermission(context);
+    final granted = await PermissionService.hasRequiredLocationForJourneyTracking();
     // #region agent log
     agentDebugLog(
       hypothesisId: 'H3',
@@ -1649,7 +1710,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
 
     if (!mounted) return;
-    final granted = await PermissionService.requestLocationPermission(context);
+    final granted = await PermissionService.hasRequiredLocationForJourneyTracking();
     // #region agent log
     agentDebugLog(
       hypothesisId: 'H3',
@@ -1662,7 +1723,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
     if (!granted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Location permission is required to track your journey'),
+          content: Text(
+            'Location set to "Allow all the time" is required to track your journey. '
+            'Enable it in Settings (complete payment setup first if you see that screen).',
+          ),
         ),
       );
       return;
@@ -2017,14 +2081,25 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
 
   void _onItemTapped(int index) async {
+    if (_paymentSetupLocationBlocked) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Allow location access ("Allow all the time" on Android) before leaving this step.',
+          ),
+        ),
+      );
+      return;
+    }
     setState(() {
       _selectedIndex = index;
       _isLoading = true;
     });
-    
+
     // Reset retry counter when user manually navigates
     _resetRetryCounter();
-    
+
     _controller.loadRequest(Uri.parse(_urls[index]));
   }
   
@@ -2343,6 +2418,79 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   ),
                 ),
               ),
+              if (_paymentSetupLocationBlocked)
+                Positioned.fill(
+                  child: Material(
+                    color: Colors.white,
+                    child: SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Icon(
+                              Icons.location_on_outlined,
+                              size: 64,
+                              color: Color(0xFF4CBB17),
+                            ),
+                            const SizedBox(height: 24),
+                            const Text(
+                              'Location access required',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'To continue with payment setup, open Settings and allow location for FoodnPals. '
+                              'On Android, choose "Allow all the time". You cannot use this screen until that is enabled. '
+                              'Use Go back to return to the previous page.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey.shade800,
+                                height: 1.45,
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                            ElevatedButton(
+                              onPressed: () async {
+                                await Geolocator.openAppSettings();
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF4CBB17),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: const Text(
+                                'Open Settings',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            TextButton(
+                              onPressed: () async {
+                                if (await _controller.canGoBack()) {
+                                  await _controller.goBack();
+                                }
+                              },
+                              child: const Text('Go back'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

@@ -4,6 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
 class PermissionService {
+  /// Android: requires "Allow all the time" for background journey tracking.
+  /// iOS: while-in-use or always is sufficient.
+  static Future<bool> hasRequiredLocationForJourneyTracking() async {
+    final p = await Geolocator.checkPermission();
+    if (p == LocationPermission.denied || p == LocationPermission.deniedForever) {
+      return false;
+    }
+    if (Platform.isAndroid) {
+      return p == LocationPermission.always;
+    }
+    return p == LocationPermission.whileInUse || p == LocationPermission.always;
+  }
+
   static Future<bool> requestLocationPermission(BuildContext context) async {
     var p = await Geolocator.checkPermission();
     if (p == LocationPermission.denied) {
