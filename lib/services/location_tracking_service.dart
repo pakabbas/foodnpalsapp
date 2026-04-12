@@ -99,10 +99,6 @@ void onTrackingServiceStart(ServiceInstance service) {
   double? restaurantLng;
   String? bearerToken;
 
-  /// Successful server syncs / failed attempts (GPS or network).
-  int locationSuccessCount = 0;
-  int locationFailCount = 0;
-
   Future<void> cleanup() async {
     pollTimer?.cancel();
     maxTimer?.cancel();
@@ -112,23 +108,18 @@ void onTrackingServiceStart(ServiceInstance service) {
     restaurantLat = null;
     restaurantLng = null;
     bearerToken = null;
-    locationSuccessCount = 0;
-    locationFailCount = 0;
   }
 
-  Future<void> refreshForegroundNotification() async {
+  /// Static text only — Android foreground service requires a notification; do not refresh on every tick.
+  Future<void> setStaticForegroundNotification() async {
     if (!Platform.isAndroid) {
       return;
     }
     try {
       final android = service as AndroidServiceInstance;
-      final title = 'On my way ($locationSuccessCount/$locationFailCount)';
-      final content =
-          'FoodnPals is tracking your journey · $locationSuccessCount updated'
-          '${locationFailCount > 0 ? ', $locationFailCount failed' : ''}';
       await android.setForegroundNotificationInfo(
-        title: title,
-        content: content,
+        title: 'On my way',
+        content: 'FoodnPals is tracking your journey',
       );
     } catch (_) {}
   }
@@ -211,21 +202,16 @@ void onTrackingServiceStart(ServiceInstance service) {
           await service.stopSelf();
           return;
         case _LocationPostOutcome.posted:
-          locationSuccessCount++;
-          await refreshForegroundNotification();
           if (arrived) {
             await cleanup();
             await service.stopSelf();
           }
           return;
         case _LocationPostOutcome.failed:
-          locationFailCount++;
-          await refreshForegroundNotification();
           return;
       }
     } catch (_) {
-      locationFailCount++;
-      await refreshForegroundNotification();
+      // Skip tick on GPS/network errors; next periodic tick retries.
     }
   }
 
@@ -291,7 +277,7 @@ void onTrackingServiceStart(ServiceInstance service) {
       try {
         final android = service as AndroidServiceInstance;
         await android.setAsForegroundService();
-        await refreshForegroundNotification();
+        await setStaticForegroundNotification();
         // #region agent log
         agentDebugLog(
           hypothesisId: 'H5',

@@ -1,5 +1,5 @@
-# Release APK + App Bundle. Requires repository secrets (see repo README or docs).
-name: Android release build
+# Release signed APK. Requires ANDROID_* secrets in repo Settings → Secrets → Actions.
+name: Android APK release
 
 on:
   push:
@@ -46,18 +46,10 @@ jobs:
             "storeFile=ci-release.jks" \
             > android/key.properties
 
-      - name: Build APK (release)
+      - name: Build release APK
         run: flutter build apk --release
-
-      - name: Build App Bundle (release)
-        run: flutter build appbundle --release
 
       - uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: app-release-aab
-          path: build/app/outputs/bundle/release/app-release.aab

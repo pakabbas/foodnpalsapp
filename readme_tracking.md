@@ -1,4 +1,9 @@
 FoodnPals — Customer Location Tracking
+
+**Status:** Customer journey tracking is implemented and working in the app. The Android foreground notification uses fixed text (“On my way” / “FoodnPals is tracking your journey”) and is **not** updated on every location tick (avoids noisy counter-style updates).
+
+---
+
 Context
 FoodnPals is a dine-in food ordering app (like UberEats but for table service). The app is a Flutter WebView wrapper around foodnpals.com. When a customer makes an instant table booking (reservation), we need to track their GPS location for up to 1 hour as they travel to the restaurant — including when the app is minimized or the screen is off.
 The backend API, database, and restaurant dashboard are already built. This task is Flutter-only.
