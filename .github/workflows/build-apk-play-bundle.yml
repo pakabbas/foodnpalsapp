@@ -1,12 +1,16 @@
-# Same artifacts as "Android release APK and Play bundle", but runs only when you click "Run workflow".
-# Use this to rebuild signed APK + AAB without pushing a commit.
-name: Android release APK + AAB (manual)
+# Manual-only: signed release APK + Play Store .aab (same secrets as other Android workflows).
+# Actions → "Build APK and Play Store bundle" → Run workflow.
+name: Build APK and Play Store bundle
 
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: build-apk-play-bundle-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -42,7 +46,7 @@ jobs:
             exit 1
           fi
           if [ -z "${STORE_PASSWORD:-}" ] || [ -z "${KEY_PASSWORD:-}" ] || [ -z "${KEY_ALIAS:-}" ]; then
-            echo "::error::Missing one of ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_PASSWORD, ANDROID_KEY_ALIAS."
+            echo "::error::Missing ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_PASSWORD, or ANDROID_KEY_ALIAS."
             exit 1
           fi
           echo "$KEYSTORE_BASE64" | base64 -d > android/app/ci-release.jks
@@ -56,7 +60,7 @@ jobs:
       - name: Build release APK
         run: flutter build apk --release
 
-      - name: Build Play Store bundle (App Bundle)
+      - name: Build Play Store App Bundle
         run: flutter build appbundle --release
 
       - uses: actions/upload-artifact@v4
