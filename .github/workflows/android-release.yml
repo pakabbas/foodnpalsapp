@@ -1,5 +1,7 @@
-# Release signed APK. Requires ANDROID_* secrets in repo Settings → Secrets → Actions.
-name: Android APK release
+# Signed release APK + Play Store App Bundle (.aab).
+# Secrets: ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_PASSWORD, ANDROID_KEY_ALIAS
+# Upload the .aab to Play Console (Production or testing). Use .apk for sideload / testers outside Play.
+name: Android release APK and Play bundle
 
 on:
   push:
@@ -48,7 +50,7 @@ jobs:
             exit 1
           fi
           if [ -z "${KEY_ALIAS:-}" ]; then
-            echo "::error::Missing ANDROID_KEY_ALIAS. Must match the alias inside your .jks (e.g. key0). Check android/key.properties locally for keyAlias=..."
+            echo "::error::Missing ANDROID_KEY_ALIAS. Must match the alias inside your .jks (e.g. key0)."
             exit 1
           fi
           echo "$KEYSTORE_BASE64" | base64 -d > android/app/ci-release.jks
@@ -59,10 +61,19 @@ jobs:
             "storeFile=ci-release.jks" \
             > android/key.properties
 
+      # Release mode: tree-shaking, AOT, signed with release keystore (required for Play).
       - name: Build release APK
         run: flutter build apk --release
+
+      - name: Build Play Store bundle (App Bundle)
+        run: flutter build appbundle --release
 
       - uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: build/app/outputs/bundle/release/app-release.aab
