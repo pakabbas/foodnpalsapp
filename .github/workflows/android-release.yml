@@ -34,8 +34,21 @@ jobs:
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
+          set -e
           if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "Missing secret ANDROID_KEYSTORE_BASE64. Add Android signing secrets under Repo Settings → Secrets and variables → Actions."
+            echo "::error::Missing ANDROID_KEYSTORE_BASE64. Repo → Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          if [ -z "${STORE_PASSWORD:-}" ]; then
+            echo "::error::Missing ANDROID_KEYSTORE_PASSWORD (keystore / store password)."
+            exit 1
+          fi
+          if [ -z "${KEY_PASSWORD:-}" ]; then
+            echo "::error::Missing ANDROID_KEY_PASSWORD (key password)."
+            exit 1
+          fi
+          if [ -z "${KEY_ALIAS:-}" ]; then
+            echo "::error::Missing ANDROID_KEY_ALIAS. Must match the alias inside your .jks (e.g. key0). Check android/key.properties locally for keyAlias=..."
             exit 1
           fi
           echo "$KEYSTORE_BASE64" | base64 -d > android/app/ci-release.jks
