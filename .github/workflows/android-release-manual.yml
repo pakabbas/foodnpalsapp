@@ -1,19 +1,12 @@
-# Signed release APK + Play Store App Bundle (.aab).
-# Secrets: ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_PASSWORD, ANDROID_KEY_ALIAS
-# Upload the .aab to Play Console. Use .apk for sideload / testers outside Play.
-name: Android release APK and Play bundle
+# Same artifacts as "Android release APK and Play bundle", but runs only when you click "Run workflow".
+# Use this to rebuild signed APK + AAB without pushing a commit.
+name: Android release APK + AAB (manual)
 
 on:
-  push:
-    branches: [main, master]
   workflow_dispatch:
 
 permissions:
   contents: read
-
-concurrency:
-  group: android-release-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build:
@@ -45,19 +38,11 @@ jobs:
         run: |
           set -e
           if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::error::Missing ANDROID_KEYSTORE_BASE64. Repo → Settings → Secrets and variables → Actions."
+            echo "::error::Missing ANDROID_KEYSTORE_BASE64."
             exit 1
           fi
-          if [ -z "${STORE_PASSWORD:-}" ]; then
-            echo "::error::Missing ANDROID_KEYSTORE_PASSWORD (keystore / store password)."
-            exit 1
-          fi
-          if [ -z "${KEY_PASSWORD:-}" ]; then
-            echo "::error::Missing ANDROID_KEY_PASSWORD (key password)."
-            exit 1
-          fi
-          if [ -z "${KEY_ALIAS:-}" ]; then
-            echo "::error::Missing ANDROID_KEY_ALIAS. Must match the alias inside your .jks (e.g. key0)."
+          if [ -z "${STORE_PASSWORD:-}" ] || [ -z "${KEY_PASSWORD:-}" ] || [ -z "${KEY_ALIAS:-}" ]; then
+            echo "::error::Missing one of ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_PASSWORD, ANDROID_KEY_ALIAS."
             exit 1
           fi
           echo "$KEYSTORE_BASE64" | base64 -d > android/app/ci-release.jks
@@ -68,7 +53,6 @@ jobs:
             "storeFile=ci-release.jks" \
             > android/key.properties
 
-      # Release mode: tree-shaking, AOT, signed with release keystore (required for Play).
       - name: Build release APK
         run: flutter build apk --release
 
