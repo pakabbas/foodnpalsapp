@@ -132,6 +132,23 @@ GOOGLE PLAY
   versionCode must be higher than the last upload — use the +BUILD number in
   pubspec.yaml.
 
+  Play Console errors (common):
+
+  "You cannot remove all production APKs and Android App Bundles"
+  "You need to upload an APK or Android App Bundle for this app"
+
+  These usually mean the draft release would leave Production empty. Fix:
+  1. Production → Releases (or Create new release).
+  2. ADD your new .aab FIRST (App bundles → Upload), wait until it finishes
+     processing (no errors on the bundle row).
+  3. Set release name / notes, then Review and roll out.
+  Do NOT remove or deactivate the previous bundle in the same edit until the new
+  bundle is added and saved — or create a brand-new release that only adds the
+  higher versionCode bundle.
+
+  The signing key for uploads must stay the same as your Play upload key (CI uses
+  repo secrets; local builds use your key.properties keystore).
+
 ================================================================================
 TROUBLESHOOTING
 ================================================================================

@@ -25,6 +25,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Release version (from pubspec.yaml)
+        run: |
+          set -e
+          echo "pubspec version line:"
+          grep '^version:' pubspec.yaml
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
