@@ -104,6 +104,30 @@ CI SECRETS (GitHub: Settings → Secrets and variables → Actions)
     base64 -i my-release.jks | pbcopy   # or tr -d '\n' and paste into secret
 
 ================================================================================
+LOCAL KEYSTORE FILES (your machine — NOT in git; android/.gitignore)
+================================================================================
+
+  Checked into this repo folder layout only on disk (never pushed to GitHub):
+
+  android/app/foodnpals-release-key.jks
+    Alias: key0
+    SHA1:  B5:2F:B2:4C:F5:D7:1D:AB:88:21:D0:4C:DD:6B:08:AE:12:BD:AC:4F
+    This matches android/key.properties storeFile when set to foodnpals-release-key.jks.
+    If Play Console expects a DIFFERENT SHA1 (e.g. 82:22:0F:63:...), this file is the
+    WRONG upload key — do NOT put this file in ANDROID_KEYSTORE_BASE64.
+
+  android/FoodnPalsWaiter (1).jks
+    Same SHA1 as foodnpals-release-key.jks (same certificate).
+
+  android/app/oldfoodnpals-release-key.keystore
+    Not verified here (keystore password differs from the sample in key.properties).
+    Strong candidate for the ORIGINAL Play upload key — run when you know the password:
+      keytool -list -v -keystore android/app/oldfoodnpals-release-key.keystore
+    Until SHA1 matches Play’s “Upload key certificate”, keep trying backups / old laptops.
+
+  No cloud/Drive links for keystores were found in tracked project files.
+
+================================================================================
 LOCAL BUILD (optional — same outputs as CI, on your machine)
 ================================================================================
 
