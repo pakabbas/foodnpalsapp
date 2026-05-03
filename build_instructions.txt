@@ -1,0 +1,147 @@
+================================================================================
+  FoodnPals — Android release build instructions (APK + AAB)
+  Point the coding assistant to this file when you want: version bump, CI run,
+  or local release builds.
+================================================================================
+
+REPOSITORY
+----------
+  GitHub (browser):  https://github.com/pakabbas/foodnpalsapp
+  Clone (HTTPS):     https://github.com/pakabbas/foodnpalsapp.git
+  Clone (SSH):       git@github.com:pakabbas/foodnpalsapp.git
+  Default branch:    main
+
+  GitHub Actions:    https://github.com/pakabbas/foodnpalsapp/actions
+  Workflow name:     "Android release (APK + AAB)"
+  Workflow file:     .github/workflows/android-release.yml
+
+  Releases (optional, when using version tags):
+    https://github.com/pakabbas/foodnpalsapp/releases
+
+================================================================================
+VERSION (single source of truth)
+================================================================================
+
+  File:  pubspec.yaml
+  Line:  version: X.Y.Z+BUILD
+
+  - X.Y.Z  = user-facing version name (shown in stores / app info).
+  - BUILD  = positive integer; must increase for every upload to Google Play
+             (android defaultConfig versionCode comes from this number).
+
+  Current example in repo:  version: 1.0.5+28
+    → versionName 1.0.5, versionCode 28
+
+  How to increment (pick one each release):
+  - Play Store update (most common): bump +BUILD only, e.g. 1.0.5+28 → 1.0.5+29
+  - New marketing version: bump X.Y.Z and +BUILD, e.g. 1.0.5+28 → 1.0.6+29
+
+  After editing pubspec.yaml, commit the change before building or pushing.
+
+================================================================================
+FOR THE CODING ASSISTANT (自动化 / “point to this file”)
+================================================================================
+
+  When the user references this file and asks for a new APK/AAB build:
+
+  1. Open pubspec.yaml and increment version as in the section above
+     (typically +1 on the number after + for Play).
+
+  2. Commit with a clear message, e.g. "chore: bump version to 1.0.5+29"
+
+  3. Push to origin main:
+       git push origin main
+
+  4. That push triggers "Android release (APK + AAB)" on GitHub Actions.
+     Tell the user to open:
+       https://github.com/pakabbas/foodnpalsapp/actions
+     and download artifacts from the latest successful run:
+       - app-release-apk   → app-release.apk
+       - app-release-aab   → app-release.aab
+
+  5. Optional — attach binaries to a GitHub Release (human-readable downloads):
+       git tag v1.0.6
+       git push origin v1.0.6
+     Tag must match pubspec user version loosely (project convention: tag vX.Y.Z).
+     The workflow publishes Release assets only on tag push matching v*.
+
+  6. Ensure repo Actions secrets exist (see CI SECRETS below). Missing secrets
+     make the workflow fail at signing.
+
+================================================================================
+GITHUB CI — WHAT RUNS WHEN
+================================================================================
+
+  Triggers:
+  - Push to branches: main, master
+  - Push tags: v*     (e.g. v1.0.6)
+  - Manual: Actions tab → "Android release (APK + AAB)" → Run workflow
+
+  Jobs:
+  - build: flutter build apk --release, flutter build appbundle --release,
+           uploads two artifacts (retention 90 days).
+  - publish-release: runs only on tag push refs/tags/v* — attaches APK+AAB
+                     to a GitHub Release.
+
+  Outputs (artifact names):
+  - app-release-apk  → build/app/outputs/flutter-apk/app-release.apk
+  - app-release-aab  → build/app/outputs/bundle/release/app-release.aab
+
+================================================================================
+CI SECRETS (GitHub: Settings → Secrets and variables → Actions)
+================================================================================
+
+  Required names:
+  - ANDROID_KEYSTORE_BASE64   Entire .jks file, base64-encoded (one line).
+  - ANDROID_KEYSTORE_PASSWORD Keystore / store password.
+  - ANDROID_KEY_PASSWORD      Key password (often same as store password).
+  - ANDROID_KEY_ALIAS         Alias inside the keystore (e.g. key0).
+
+  Local encoding example (PowerShell, run next to your keystore):
+    [Convert]::ToBase64String([IO.File]::ReadAllBytes("my-release.jks")) | Set-Clipboard
+
+  Local encoding example (macOS / Linux):
+    base64 -i my-release.jks | pbcopy   # or tr -d '\n' and paste into secret
+
+================================================================================
+LOCAL BUILD (optional — same outputs as CI, on your machine)
+================================================================================
+
+  Prerequisites: Flutter SDK, Android SDK, java 17, release keystore.
+
+  1. android/key.properties (never commit real secrets; android/.gitignore
+     already ignores key.properties)
+     storePassword=...
+     keyPassword=...
+     keyAlias=...
+     storeFile=../path/to/your.jks
+
+  2. flutter pub get
+  3. flutter build apk --release
+  4. flutter build appbundle --release
+
+  Paths:
+  - APK:  build/app/outputs/flutter-apk/app-release.apk
+  - AAB:  build/app/outputs/bundle/release/app-release.aab
+
+================================================================================
+GOOGLE PLAY
+================================================================================
+
+  Upload: use the .aab (App Bundle) in Play Console (Production or track).
+  versionCode must be higher than the last upload — use the +BUILD number in
+  pubspec.yaml.
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+  - No workflow run after push: confirm .github/workflows/android-release.yml
+    exists on the branch you pushed; confirm Actions are enabled for the repo.
+  - Build fails at signing: verify all four ANDROID_* secrets and that
+    KEY_ALIAS matches the keystore.
+  - Wrong version on device: edit pubspec version, commit, push, rebuild.
+
+================================================================================
+END
+================================================================================
