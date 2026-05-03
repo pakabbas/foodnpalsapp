@@ -19,6 +19,7 @@ import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 import 'debug_agent_log.dart';
 import 'services/location_tracking_service.dart';
 import 'services/permission_service.dart';
+import 'widgets/location_permission_instruction_video.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -1119,6 +1120,8 @@ class _WebViewScreenState extends State<WebViewScreen> with WidgetsBindingObserv
   /// Blocks interaction with the WebView on [payment_setup.php] until location is "always" (Android) or acceptable (iOS).
   bool _paymentSetupLocationBlocked = false;
 
+  static const String _kHomeMobileUrl = 'https://foodnpals.com/HomeMobile.php';
+
   late final List<String> _urls;
 
   @override
@@ -1129,7 +1132,7 @@ class _WebViewScreenState extends State<WebViewScreen> with WidgetsBindingObserv
     
     // Initialize URLs (authentication will be handled via cookies)
     _urls = [
-      'https://foodnpals.com/HomeMobile.php', // Home
+      _kHomeMobileUrl, // Home
       'https://foodnpals.com/CustomerBookings.php', // Booking
       'https://foodnpals.com/CustomerOrders.php', // Orders
       'https://foodnpals.com/CustomerProfile.php', // Profile
@@ -1500,6 +1503,7 @@ class _WebViewScreenState extends State<WebViewScreen> with WidgetsBindingObserv
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(_reevaluatePaymentSetupLocationGate());
+      unawaited(_recoverWebViewIfBrokenOnResume());
     }
   }
 
@@ -1515,6 +1519,54 @@ class _WebViewScreenState extends State<WebViewScreen> with WidgetsBindingObserv
       return false;
     }
     return uri.path.toLowerCase().contains('payment_setup.php');
+  }
+
+  bool _isFoodnpalsConfirmationUrl(String? url) {
+    if (url == null || url.isEmpty) {
+      return false;
+    }
+    final uri = Uri.tryParse(url);
+    if (uri == null) {
+      return false;
+    }
+    if (!uri.host.toLowerCase().contains('foodnpals.com')) {
+      return false;
+    }
+    return uri.path.toLowerCase().contains('confirmation.php');
+  }
+
+  /// After lock/unlock or failed back navigation, WebView may show a system error page on Confirmation or Payment setup — send user home.
+  Future<void> _recoverWebViewIfBrokenOnResume() async {
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    if (!mounted) {
+      return;
+    }
+    final url = await _controller.currentUrl() ?? _urlController.text;
+    final recoverHere =
+        _isFoodnpalsConfirmationUrl(url) || _isFoodnpalsPaymentSetupUrl(url);
+    if (!recoverHere) {
+      return;
+    }
+    try {
+      final Object? raw = await _controller.runJavaScriptReturningResult(
+        '(function(){ try { var t = document.documentElement ? document.documentElement.innerText : ""; return t.length > 1400 ? t.substring(0, 1400) : t; } catch(e) { return ""; } })();',
+      );
+      final text = raw?.toString().toLowerCase() ?? '';
+      if (text.contains('not available') ||
+          text.contains('could not be loaded') ||
+          text.contains('couldn\'t be loaded') ||
+          text.contains('couldn\'t load') ||
+          text.contains('net::err') ||
+          text.contains('err_cache_miss') ||
+          text.contains('webpage not available') ||
+          text.contains('no internet') ||
+          text.contains('connection was reset') ||
+          text.contains('err_connection')) {
+        await _navigateWebViewToHome();
+      }
+    } catch (_) {
+      // WebView may not be ready for JS yet
+    }
   }
 
   Future<void> _reevaluatePaymentSetupLocationGate([String? url]) async {
@@ -2030,7 +2082,18 @@ class _WebViewScreenState extends State<WebViewScreen> with WidgetsBindingObserv
   // Handle connection errors with automatic retry
   Future<void> _handleConnectionError(String url, String errorDescription) async {
     print('Connection error detected: $errorDescription for URL: $url');
-    
+
+    if (_isFoodnpalsConfirmationUrl(url) || _isFoodnpalsPaymentSetupUrl(url)) {
+      _resetRetryCounter();
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+      await _navigateWebViewToHome();
+      return;
+    }
+
     // Store the failed URL for retry
     _lastFailedUrl = url;
     
@@ -2106,10 +2169,22 @@ class _WebViewScreenState extends State<WebViewScreen> with WidgetsBindingObserv
   // ignore: unused_element
   Future<void> _showOfflinePage() async {
     try {
+      if (_isFoodnpalsConfirmationUrl(_lastFailedUrl) ||
+          _isFoodnpalsPaymentSetupUrl(_lastFailedUrl)) {
+        _resetRetryCounter();
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+        await _navigateWebViewToHome();
+        return;
+      }
+
       // Cancel any pending timeout timer and retry timer
       _pageLoadTimer?.cancel();
       _retryTimer?.cancel();
-      
+
       // Load bundled offline page from assets
       final html = await DefaultAssetBundle.of(context).loadString('android_asset/offline.html');
       
@@ -2208,6 +2283,16 @@ class _WebViewScreenState extends State<WebViewScreen> with WidgetsBindingObserv
     }
   }
 
+  Future<void> _navigateWebViewToHome() async {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _selectedIndex = 0;
+    });
+    await _controller.loadRequest(Uri.parse(_kHomeMobileUrl));
+  }
+
   @override
   Widget build(BuildContext context) {
     // Check if user is signed in (not guest)
@@ -2220,10 +2305,10 @@ class _WebViewScreenState extends State<WebViewScreen> with WidgetsBindingObserv
           return;
         }
         final raw = await _controller.currentUrl() ?? _urlController.text;
-        if (raw.toLowerCase().contains('confirmation.php')) {
-          await _controller.loadRequest(
-            Uri.parse('https://foodnpals.com/HomeMobile.php'),
-          );
+        if (_isFoodnpalsPaymentSetupUrl(raw) ||
+            _isFoodnpalsConfirmationUrl(raw) ||
+            _paymentSetupLocationBlocked) {
+          await _navigateWebViewToHome();
           return;
         }
         if (await _controller.canGoBack()) {
@@ -2425,67 +2510,68 @@ class _WebViewScreenState extends State<WebViewScreen> with WidgetsBindingObserv
                     child: SafeArea(
                       child: Padding(
                         padding: const EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            const Icon(
-                              Icons.location_on_outlined,
-                              size: 64,
-                              color: Color(0xFF4CBB17),
-                            ),
-                            const SizedBox(height: 24),
-                            const Text(
-                              'Location access required',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w700,
+                        child: SingleChildScrollView(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              const Icon(
+                                Icons.location_on_outlined,
+                                size: 56,
+                                color: Color(0xFF4CBB17),
                               ),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'To continue with payment setup, open Settings and allow location for FoodnPals. '
-                              'On Android, choose "Allow all the time". You cannot use this screen until that is enabled. '
-                              'Use Go back to return to the previous page.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey.shade800,
-                                height: 1.45,
-                              ),
-                            ),
-                            const SizedBox(height: 32),
-                            ElevatedButton(
-                              onPressed: () async {
-                                await Geolocator.openAppSettings();
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF4CBB17),
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'Location access required',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              child: const Text(
-                                'Open Settings',
+                              const SizedBox(height: 12),
+                              Text(
+                                'We need your location permission to track your journey to the restaurant. So the restaurant can prepare your table according to your arrival time. '
+                                'On Android, choose "Allow all the time". ',
+                                textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontSize: 16,
-                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade800,
+                                  height: 1.45,
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 12),
-                            TextButton(
-                              onPressed: () async {
-                                if (await _controller.canGoBack()) {
-                                  await _controller.goBack();
-                                }
-                              },
-                              child: const Text('Go back'),
-                            ),
-                          ],
+                              const SizedBox(height: 20),
+                              const LocationPermissionInstructionVideo(),
+                              const SizedBox(height: 24),
+                              ElevatedButton(
+                                onPressed: () async {
+                                  await Geolocator.openAppSettings();
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF4CBB17),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Open Settings',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              TextButton(
+                                onPressed: () async {
+                                  await _navigateWebViewToHome();
+                                },
+                                child: const Text('Go back'),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
