@@ -159,6 +159,37 @@ TROUBLESHOOTING
     KEY_ALIAS matches the keystore.
   - Wrong version on device: edit pubspec version, commit, push, rebuild.
 
+  Signing key mismatch ("wrong key", SHA1 fingerprint does not match)
+
+  Play compares the certificate inside your .aab with the UPLOAD KEY registered
+  for this app (not the "App signing key" Google holds if you use Play App Signing).
+
+  Common reasons it "worked before" then broke:
+  - GitHub secret ANDROID_KEYSTORE_BASE64 was replaced with a different .jks
+    (new machine, new keystore, copy/paste mistake).
+  - You used to upload builds signed locally with keystore A, but CI now signs
+    with keystore B.
+  - Multiple keystores exist (debug, release-old, release-new) and the wrong one
+    was base64-encoded into Actions.
+
+  Fix (pick one path):
+
+  A) Use the correct keystore in CI
+     1. On the machine where uploads worked, find the .jks / .keystore file that
+        was used for release signing.
+     2. Verify its SHA1 matches Play Console → Your app → Release → Setup →
+        App integrity / App signing → Upload key certificate (SHA-1).
+     3. Re-encode THAT file as ANDROID_KEYSTORE_BASE64 and update the four
+        ANDROID_* secrets in GitHub (alias + passwords must match that file).
+     4. Re-run the workflow and upload the new .aab.
+
+  B) Verify fingerprints locally (compare to Play’s expected SHA1):
+       keytool -list -v -keystore YOUR.keystore -alias YOUR_ALIAS
+     Look for "SHA1:" under Certificate fingerprints.
+
+  C) If the real upload key is lost: use Play Console upload key reset /
+     contact Play support (you cannot fix this in code alone).
+
 ================================================================================
 END
 ================================================================================
