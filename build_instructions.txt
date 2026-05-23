@@ -55,9 +55,9 @@ FOR THE CODING ASSISTANT (自动化 / “point to this file”)
   4. That push triggers "Android release (APK + AAB)" on GitHub Actions.
      Tell the user to open:
        https://github.com/pakabbas/foodnpalsapp/actions
-     and download artifacts from the latest successful run:
-       - app-release-apk   → app-release.apk
-       - app-release-aab   → app-release.aab
+     and download artifacts from the latest successful run (names include version):
+       - app-release-apk-<version>   → app-release.apk
+       - app-release-aab-<version>   → app-release.aab
 
   5. Optional — attach binaries to a GitHub Release (human-readable downloads):
        git tag v1.0.6
@@ -83,9 +83,12 @@ GITHUB CI — WHAT RUNS WHEN
   - publish-release: runs only on tag push refs/tags/v* — attaches APK+AAB
                      to a GitHub Release.
 
-  Outputs (artifact names):
-  - app-release-apk  → build/app/outputs/flutter-apk/app-release.apk
-  - app-release-aab  → build/app/outputs/bundle/release/app-release.aab
+  Outputs (artifact names; include version from pubspec, e.g. app-release-aab-1.0.6+29):
+  - app-release-apk-<version>  → app-release.apk
+  - app-release-aab-<version>  → app-release.aab
+  Paths inside the repo after build:
+  - build/app/outputs/flutter-apk/app-release.apk
+  - build/app/outputs/bundle/release/app-release.aab
 
 ================================================================================
 CI SECRETS (GitHub: Settings → Secrets and variables → Actions)

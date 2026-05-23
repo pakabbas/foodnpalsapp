@@ -2,7 +2,7 @@ name: foodnpalsapp
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.0.6+29
+version: 1.0.6+30
 
 environment:
   sdk: ^3.9.0
@@ -40,6 +40,7 @@ flutter:
     - android_asset/offline.html
     - assets/images/
     - assets/videos/locationpermission.mp4
+    - assets/videos/why_permission.mp4
 
 flutter_launcher_icons:
   android: true

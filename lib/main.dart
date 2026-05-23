@@ -19,7 +19,8 @@ import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 import 'debug_agent_log.dart';
 import 'services/location_tracking_service.dart';
 import 'services/permission_service.dart';
-import 'widgets/location_permission_instruction_video.dart';
+import 'screens/why_permission_screen.dart';
+import 'widgets/location_permission_gate_overlay.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -69,6 +70,8 @@ class _RootScreenState extends State<RootScreen> {
   String? _initialUrl;
   bool _loading = true;
   bool _hasSeenWelcome = false;
+  bool _hasSeenWhyPermission = false;
+  bool _continueAsGuest = false;
 
   @override
   void initState() {
@@ -80,11 +83,13 @@ class _RootScreenState extends State<RootScreen> {
   Future<void> _checkWelcomeAndLogin() async {
     final prefs = await SharedPreferences.getInstance();
     final hasSeenWelcome = prefs.getBool('hasSeenWelcome') ?? false;
+    final hasSeenWhyPermission = prefs.getBool('hasSeenWhyPermission') ?? false;
     final token = prefs.getString('ManualToken');
     final email = prefs.getString('UserEmail');
     
     setState(() {
       _hasSeenWelcome = hasSeenWelcome;
+      _hasSeenWhyPermission = hasSeenWhyPermission;
       _loading = false;
     });
     
@@ -119,6 +124,24 @@ class _RootScreenState extends State<RootScreen> {
     await prefs.setBool('hasSeenWelcome', true);
     setState(() {
       _hasSeenWelcome = true;
+      _continueAsGuest = false;
+    });
+  }
+
+  void _onWelcomeGetStartedAsGuest() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('hasSeenWelcome', true);
+    setState(() {
+      _hasSeenWelcome = true;
+      _continueAsGuest = true;
+    });
+  }
+
+  void _onWhyPermissionComplete() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('hasSeenWhyPermission', true);
+    setState(() {
+      _hasSeenWhyPermission = true;
     });
   }
 
@@ -140,12 +163,8 @@ class _RootScreenState extends State<RootScreen> {
       await Permission.notification.request();
     }
     
-    // Request location permission
-    var locStatus = await Permission.location.status;
-    if (!locStatus.isGranted) {
-      await Permission.location.request();
-    }
-    
+    // Location is requested on the login screen (after the why-permission video).
+
     // Request storage permission for file browsing (profile picture upload)
     var storageStatus = await Permission.storage.status;
     if (!storageStatus.isGranted) {
@@ -170,7 +189,24 @@ class _RootScreenState extends State<RootScreen> {
     
     // Show welcome screen for first-time users
     if (!_hasSeenWelcome) {
-      return WelcomeScreen(onWelcomeComplete: _onWelcomeComplete);
+      return WelcomeScreen(
+        onWelcomeComplete: _onWelcomeComplete,
+        onGetStartedAsGuest: _onWelcomeGetStartedAsGuest,
+      );
+    }
+
+    // Explain why location is needed (once, before login)
+    if (!_hasSeenWhyPermission) {
+      return WhyPermissionScreen(onComplete: _onWhyPermissionComplete);
+    }
+
+    if (_continueAsGuest) {
+      return WebViewScreen(
+        email: 'guest',
+        token: 'guest',
+        onLogout: () {},
+        initialUrl: 'https://foodnpals.com/HomeMobile.php',
+      );
     }
     
     // Show login screen if not logged in
@@ -196,8 +232,13 @@ String generateRandomToken([int length = 16]) {
 
 class WelcomeScreen extends StatelessWidget {
   final VoidCallback onWelcomeComplete;
-  
-  const WelcomeScreen({super.key, required this.onWelcomeComplete});
+  final VoidCallback onGetStartedAsGuest;
+
+  const WelcomeScreen({
+    super.key,
+    required this.onWelcomeComplete,
+    required this.onGetStartedAsGuest,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -294,20 +335,7 @@ class WelcomeScreen extends StatelessWidget {
                               width: double.infinity,
                               height: 50,
                               child: ElevatedButton(
-                                onPressed: () {
-                                  // Navigate to WebView with HomeMobile.php
-                                  Navigator.of(context).pushReplacement(
-                                    MaterialPageRoute(
-                                      builder: (context) => WebViewScreen(
-                                        email: 'guest',
-                                        token: 'guest',
-                                        onLogout: () {},
-                                        initialUrl: 'https://foodnpals.com/HomeMobile.php',
-                                      ),
-                                    ),
-                                  );
-                                  onWelcomeComplete();
-                                },
+                                onPressed: onGetStartedAsGuest,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF4CBB17),
                                   shape: RoundedRectangleBorder(
@@ -332,29 +360,7 @@ class WelcomeScreen extends StatelessWidget {
                             Align(
                               alignment: Alignment.centerRight,
                               child: TextButton(
-                                onPressed: () {
-                                  // Navigate to login screen
-                                  Navigator.of(context).pushReplacement(
-                                    MaterialPageRoute(
-                                      builder: (context) => LoginScreen(
-                                        onLogin: (token, email) {
-                                          // Handle login and navigate to main app
-                                          Navigator.of(context).pushReplacement(
-                                            MaterialPageRoute(
-                                              builder: (context) => WebViewScreen(
-                                                email: email,
-                                                token: token,
-                                                onLogout: () {},
-                                                initialUrl: 'https://foodnpals.com/MobileLogin.php?email=${Uri.encodeComponent(email)}&token=${Uri.encodeComponent(token)}',
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                  );
-                                  onWelcomeComplete();
-                                },
+                                onPressed: onWelcomeComplete,
                                 child: const Text(
                                   'Sign in now',
                                   style: TextStyle(
@@ -390,18 +396,54 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   final _loginFormKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _loading = false;
   String? _error;
+  bool _locationGateBlocked = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _emailController.text = '';
     _passwordController.text = '';
+    unawaited(_reevaluateLocationGate());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_reevaluateLocationGate());
+    }
+  }
+
+  Future<void> _reevaluateLocationGate() async {
+    var ok = await PermissionService.hasRequiredLocationForJourneyTracking();
+    if (!ok) {
+      var p = await Geolocator.checkPermission();
+      if (p == LocationPermission.denied) {
+        p = await Geolocator.requestPermission();
+        ok = await PermissionService.hasRequiredLocationForJourneyTracking();
+      }
+      if (!ok && mounted) {
+        ok = await PermissionService.requestLocationPermission(context);
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _locationGateBlocked = !ok;
+    });
   }
 
   Future<void> _login() async {
@@ -816,6 +858,10 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
+          if (_locationGateBlocked)
+            const Positioned.fill(
+              child: LocationPermissionGateOverlay(showGoBack: false),
+            ),
         ],
       ),
     );
@@ -2505,76 +2551,10 @@ class _WebViewScreenState extends State<WebViewScreen> with WidgetsBindingObserv
               ),
               if (_paymentSetupLocationBlocked)
                 Positioned.fill(
-                  child: Material(
-                    color: Colors.white,
-                    child: SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: SingleChildScrollView(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              const Icon(
-                                Icons.location_on_outlined,
-                                size: 56,
-                                color: Color(0xFF4CBB17),
-                              ),
-                              const SizedBox(height: 16),
-                              const Text(
-                                'Location access required',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                'We need your location permission to track your journey to the restaurant. So the restaurant can prepare your table according to your arrival time. '
-                                'On Android, choose "Allow all the time". ',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.grey.shade800,
-                                  height: 1.45,
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-                              const LocationPermissionInstructionVideo(),
-                              const SizedBox(height: 24),
-                              ElevatedButton(
-                                onPressed: () async {
-                                  await Geolocator.openAppSettings();
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF4CBB17),
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                child: const Text(
-                                  'Open Settings',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              TextButton(
-                                onPressed: () async {
-                                  await _navigateWebViewToHome();
-                                },
-                                child: const Text('Go back'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
+                  child: LocationPermissionGateOverlay(
+                    onGoBack: () async {
+                      await _navigateWebViewToHome();
+                    },
                   ),
                 ),
             ],

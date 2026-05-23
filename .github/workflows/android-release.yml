@@ -1,8 +1,12 @@
 # Signed release APK (sideload / QA) + Play Store App Bundle (.aab).
-# Secrets: ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_PASSWORD, ANDROID_KEY_ALIAS
+# See build_instructions.txt for version bumps, secrets, and downloads.
 #
-# Artifacts: every run → download app-release.apk and app-release.aab from the workflow run.
-# GitHub Release: push a tag v* (e.g. v1.0.6) to also attach both files to a release.
+# Secrets (Settings → Secrets and variables → Actions):
+#   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
+#   ANDROID_KEY_PASSWORD, ANDROID_KEY_ALIAS
+#
+# Artifacts: app-release-apk, app-release-aab (90 days retention).
+# GitHub Release: push tag v* (e.g. v1.0.6) attaches APK + AAB to a release.
 name: Android release (APK + AAB)
 
 on:
@@ -22,14 +26,23 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
-      - name: Release version (from pubspec.yaml)
+      - name: Parse version from pubspec.yaml
+        id: app_version
         run: |
           set -e
-          echo "pubspec version line:"
-          grep '^version:' pubspec.yaml
+          line=$(grep '^version:' pubspec.yaml | head -1)
+          full="${line#version: }"
+          full="${full// /}"
+          name="${full%%+*}"
+          code="${full#*+}"
+          echo "full=$full" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "Building versionName=$name versionCode=$code"
 
       - uses: actions/setup-java@v4
         with:
@@ -40,6 +53,9 @@ jobs:
         with:
           channel: stable
           cache: true
+
+      - name: Accept Android SDK licenses
+        run: yes | flutter doctor --android-licenses
 
       - name: Dependencies
         run: |
@@ -78,25 +94,54 @@ jobs:
             "storeFile=ci-release.jks" \
             > android/key.properties
 
+      - name: Tune Gradle for CI (Linux)
+        run: |
+          {
+            echo ""
+            echo "# CI overrides (faster builds on Linux runners)"
+            echo "org.gradle.parallel=true"
+            echo "org.gradle.caching=true"
+            echo "org.gradle.workers.max=4"
+          } >> android/gradle.properties
+
       - name: Build release APK
         run: flutter build apk --release
 
       - name: Build Play Store bundle (App Bundle)
         run: flutter build appbundle --release
 
+      - name: Verify outputs
+        run: |
+          set -e
+          test -f build/app/outputs/flutter-apk/app-release.apk
+          test -f build/app/outputs/bundle/release/app-release.aab
+          ls -lh build/app/outputs/flutter-apk/app-release.apk
+          ls -lh build/app/outputs/bundle/release/app-release.aab
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-apk
+          name: app-release-apk-${{ steps.app_version.outputs.full }}
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 90
+          if-no-files-found: error
 
       - name: Upload App Bundle artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-aab
+          name: app-release-aab-${{ steps.app_version.outputs.full }}
           path: build/app/outputs/bundle/release/app-release.aab
           retention-days: 90
+          if-no-files-found: error
+
+      - name: Build summary
+        run: |
+          echo "### Release build complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **versionName:** ${{ steps.app_version.outputs.name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **versionCode:** ${{ steps.app_version.outputs.code }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Artifacts:** \`app-release-apk-${{ steps.app_version.outputs.full }}\`, \`app-release-aab-${{ steps.app_version.outputs.full }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Play Store:** upload the .aab from the AAB artifact" >> "$GITHUB_STEP_SUMMARY"
 
   publish-release:
     needs: build
@@ -105,16 +150,27 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse version from pubspec.yaml
+        id: app_version
+        run: |
+          set -e
+          line=$(grep '^version:' pubspec.yaml | head -1)
+          full="${line#version: }"
+          full="${full// /}"
+          echo "full=$full" >> "$GITHUB_OUTPUT"
+
       - name: Download APK
         uses: actions/download-artifact@v4
         with:
-          name: app-release-apk
+          name: app-release-apk-${{ steps.app_version.outputs.full }}
           path: release-assets
 
       - name: Download App Bundle
         uses: actions/download-artifact@v4
         with:
-          name: app-release-aab
+          name: app-release-aab-${{ steps.app_version.outputs.full }}
           path: release-assets
 
       - name: Publish GitHub Release with APK + AAB
