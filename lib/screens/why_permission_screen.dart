@@ -76,29 +76,45 @@ class _WhyPermissionScreenState extends State<WhyPermissionScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: c != null && c.value.isInitialized
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: AspectRatio(
-                          aspectRatio: c.value.aspectRatio,
-                          child: VideoPlayer(c),
-                        ),
-                      )
-                    : DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade200,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Center(
-                          child: CircularProgressIndicator(
-                            color: Color(0xFF4CBB17),
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: c != null && c.value.isInitialized
+                      ? ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight: MediaQuery.sizeOf(context).height * 0.32,
+                            maxWidth: MediaQuery.sizeOf(context).width - 40,
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: AspectRatio(
+                              aspectRatio: c.value.aspectRatio > 0
+                                  ? c.value.aspectRatio
+                                  : 16 / 9,
+                              child: VideoPlayer(c),
+                            ),
+                          ),
+                        )
+                      : ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight: MediaQuery.sizeOf(context).height * 0.32,
+                            maxWidth: MediaQuery.sizeOf(context).width - 40,
+                          ),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade200,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                color: Color(0xFF4CBB17),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                ),
               ),
             ),
             Padding(
